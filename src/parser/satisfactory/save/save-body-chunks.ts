@@ -114,10 +114,15 @@ export namespace SaveBodyChunks {
         const totalUncompressedSize = bufferArray.byteLength;
         const chunkHeaderSize = compressionInfo.chunkHeaderVersion === SaveBodyChunks.HEADER_V1 ? 48 : 49;
 
-        const saveBody = new Uint8Array(bufferArray.byteLength + (blueprintOrSave === 'blueprint' ? 4 : 8));
-        saveBody.set(new Uint8Array(bufferArray), 4);
+        const sizeFieldBytes = blueprintOrSave === 'blueprint' ? 4 : 8;
+        const saveBody = new Uint8Array(bufferArray.byteLength + sizeFieldBytes);
+        saveBody.set(new Uint8Array(bufferArray), sizeFieldBytes);
         const miniView = new DataView(saveBody.buffer);
-        miniView.setInt32(0, totalUncompressedSize, alignment === Alignment.LITTLE_ENDIAN);
+        if (sizeFieldBytes === 8) {
+            miniView.setBigInt64(0, BigInt(totalUncompressedSize), alignment === Alignment.LITTLE_ENDIAN);
+        } else {
+            miniView.setInt32(0, totalUncompressedSize, alignment === Alignment.LITTLE_ENDIAN);
+        }
         onBinaryBeforeCompressing(saveBody.buffer);
 
         // collect slices of chunks with help of compression info for max chunk size

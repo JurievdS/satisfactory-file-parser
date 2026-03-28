@@ -2,6 +2,7 @@ import { ContextReader } from '../../../context/context-reader';
 import { ContextWriter } from '../../../context/context-writer';
 import { ParserError } from '../../../error/parser.error';
 import { SaveCustomVersion } from '../../save/save-custom-version';
+import { SaveObjectVersionData } from '../../save/save-object-version-data';
 import { PropertiesMap } from "../property/generic/AbstractBaseProperty";
 import { PropertiesList } from '../property/PropertiesList';
 import { SpecialProperties } from '../property/special/SpecialProperties';
@@ -21,6 +22,7 @@ export abstract class SaveObject implements SaveObjectHeader {
 
 	public saveCustomVersion: number = 0;
 	public shouldMigrateObjectRefsToPersistent: boolean = false;
+	public perObjectVersionData?: SaveObjectVersionData;
 
 	constructor(public typePath: string, public rootObject: string, public instanceName: string, public flags?: number) {
 
@@ -46,12 +48,17 @@ export abstract class SaveObject implements SaveObjectHeader {
 		}
 	}
 
-	public static ParseData(obj: SaveObject, length: number, reader: ContextReader, typePath: string): void {
+	public static ParseData(obj: SaveObject, length: number, reader: ContextReader, typePath: string, objectUE5Version: number = -1): void {
 		const start = reader.getBufferPosition();
 		let remainingSize = length;
 
 		try {
-			obj.properties = PropertiesList.ParseList(reader);
+			// serializationControl byte (UE5 version >= 1011)
+			if (objectUE5Version >= 1011) {
+				reader.readByte(); // expected 0
+			}
+
+			obj.properties = PropertiesList.ParseList(reader, objectUE5Version);
 			reader.readInt32Zero();
 
 			remainingSize = length - (reader.getBufferPosition() - start);

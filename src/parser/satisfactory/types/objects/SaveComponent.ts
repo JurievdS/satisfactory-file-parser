@@ -30,7 +30,7 @@ export class SaveComponent extends SaveObject implements SaveComponentHeader {
 		writer.writeString(component.parentEntityName);
 	}
 
-	public static ParseData(component: SaveComponent, length: number, reader: ContextReader, typePath: string): void {
-		SaveObject.ParseData(component, length, reader, typePath);
+	public static ParseData(component: SaveComponent, length: number, reader: ContextReader, typePath: string, objectUE5Version: number = -1): void {
+		SaveObject.ParseData(component, length, reader, typePath, objectUE5Version);
 	}
 }

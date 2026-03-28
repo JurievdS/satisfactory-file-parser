@@ -3,10 +3,12 @@ import { ObjectReference } from '../types/structs/ObjectReference';
 import { Levels } from './level';
 import { SatisfactorySaveHeader } from './satisfactory-save-header';
 import { ChunkCompressionInfo } from './save-body-chunks';
+import { SaveObjectVersionData } from './save-object-version-data';
 
 export class SatisfactorySave {
 	public name: string;
 	public header: SatisfactorySaveHeader;
+	public persistentLevelVersionData?: SaveObjectVersionData;
 	public saveBodyValidation: SaveBodyValidation = { grids: {} };
 	public levels: Levels = {};
 	public compressionInfo?: ChunkCompressionInfo;

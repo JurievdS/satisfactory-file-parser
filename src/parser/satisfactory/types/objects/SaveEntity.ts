@@ -46,7 +46,7 @@ export class SaveEntity extends SaveObject {
 		obj.wasPlacedInLevel = reader.readInt32() == 1;
 	}
 
-	public static ParseData(entity: SaveEntity, length: number, reader: ContextReader, typePath: string): void {
+	public static ParseData(entity: SaveEntity, length: number, reader: ContextReader, typePath: string, objectUE5Version: number = -1): void {
 
 		const start = reader.getBufferPosition();
 
@@ -59,7 +59,7 @@ export class SaveEntity extends SaveObject {
 		}
 
 		const remainingSize = length - (reader.getBufferPosition() - start);
-		return SaveObject.ParseData(entity, remainingSize, reader, typePath);
+		return SaveObject.ParseData(entity, remainingSize, reader, typePath, objectUE5Version);
 	}
 
 	public static SerializeHeader(writer: ContextWriter, entity: SaveEntity): void {

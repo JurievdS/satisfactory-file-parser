@@ -8,6 +8,7 @@ import { SatisfactorySave } from "./satisfactory/save/satisfactory-save";
 import { SatisfactorySaveHeader } from './satisfactory/save/satisfactory-save-header';
 import { ChunkSummary } from './satisfactory/save/save-body-chunks';
 import { SaveCustomVersion } from './satisfactory/save/save-custom-version';
+import { SaveObjectVersionData } from './satisfactory/save/save-object-version-data';
 import { SaveReader } from './satisfactory/save/save-reader';
 import { SaveWriter } from "./satisfactory/save/save-writer";
 import { ObjectReference } from './satisfactory/types/structs/ObjectReference';
@@ -53,6 +54,12 @@ export class Parser {
 		// call callback on decompressed save body
 		if (options?.onDecompressedSaveBody !== undefined) {
 			options.onDecompressedSaveBody(reader.getBuffer());
+		}
+
+		// persistent level version data (saveVersion >= 53, i.e. v1.1.3+)
+		if (reader.context.saveVersion >= SaveCustomVersion.SerializePerObjectVersionData) {
+			save.persistentLevelVersionData = SaveObjectVersionData.Parse(reader);
+			reader.context.persistentLevelUE5Version = SaveObjectVersionData.GetUE5Version(save.persistentLevelVersionData);
 		}
 
 		// world partition and validation
@@ -105,6 +112,11 @@ export class Parser {
 
 		SatisfactorySaveHeader.Serialize(writer, save.header);
 		const posAfterHeader = writer.getBufferPosition();
+
+		// persistent level version data (saveVersion >= 53)
+		if (writer.context.saveVersion >= SaveCustomVersion.SerializePerObjectVersionData && save.persistentLevelVersionData) {
+			SaveObjectVersionData.Serialize(writer, save.persistentLevelVersionData);
+		}
 
 		if (writer.context.saveVersion >= SaveCustomVersion.IntroducedWorldPartition) {
 			SaveBodyValidation.Serialize(writer, save.saveBodyValidation);

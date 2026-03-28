@@ -15,6 +15,7 @@ export * from './parser/satisfactory/save/satisfactory-save';
 export * from './parser/satisfactory/save/satisfactory-save-header';
 export * from './parser/satisfactory/save/save-body-chunks';
 export * from './parser/satisfactory/save/save-custom-version';
+export * from './parser/satisfactory/save/save-object-version-data';
 export * from './parser/satisfactory/save/save-header-type';
 export * from './parser/satisfactory/save/save.types';
 export * from './parser/satisfactory/types/objects/SaveComponent';

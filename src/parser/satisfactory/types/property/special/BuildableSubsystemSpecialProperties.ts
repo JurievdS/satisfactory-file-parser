@@ -42,7 +42,7 @@ export namespace BuildableSubsystemSpecialProperties {
 
                 const instances: BuildableTypeInstance[] = [];
                 for (let j = 0; j < count; j++) {
-                    instances.push(BuildableTypeInstance.Parse(reader, property.currentLightweightVersion ?? 0));
+                    instances.push(BuildableTypeInstance.Parse(reader, property.currentLightweightVersion ?? 0, reader.context.saveVersion));
                 }
 
                 property.buildables.push({
@@ -69,7 +69,7 @@ export namespace BuildableSubsystemSpecialProperties {
                 ObjectReference.write(writer, buildable.typeReference);
                 writer.writeInt32(buildable.instances.length);
                 for (const instance of buildable.instances) {
-                    BuildableTypeInstance.Serialize(writer, instance, property.currentLightweightVersion ?? 0);
+                    BuildableTypeInstance.Serialize(writer, instance, property.currentLightweightVersion ?? 0, writer.context.saveVersion);
                 }
             }
         }
@@ -89,10 +89,12 @@ export type BuildableTypeInstance = {
     usedRecipe: ObjectReference;
     blueprintProxy: ObjectReference;
     instanceSpecificData?: FGDynamicStruct;
+    serviceProvider?: number;
+    playerInfoTableIndex?: number;
 };
 
 export namespace BuildableTypeInstance {
-    export const Parse = (reader: ContextReader, lightWeightVersion: number): BuildableTypeInstance => {
+    export const Parse = (reader: ContextReader, lightWeightVersion: number, saveVersion: number = 0): BuildableTypeInstance => {
         const transform = Transform.Parse(reader);
 
         const usedSwatchSlot = ObjectReference.read(reader);
@@ -113,6 +115,18 @@ export namespace BuildableTypeInstance {
             instanceSpecificData = FGDynamicStruct.Parse(reader);
         }
 
+        let serviceProvider;
+        let playerInfoTableIndex;
+        if (lightWeightVersion >= RuntimeBuildableInstanceDataVersion.AddedServiceProviderAndPlayerInfo) {
+            // saveVersion 57 was an unreleased build with a merge conflict bug
+            if (saveVersion === 57) {
+                reader.readByte();  // junk byte
+                reader.readInt32(); // junk int32
+            }
+            serviceProvider = reader.readByte();
+            playerInfoTableIndex = saveVersion >= 57 ? reader.readInt32() : reader.readByte();
+        }
+
         return {
             transform,
             primaryColor,
@@ -125,11 +139,13 @@ export namespace BuildableTypeInstance {
             usedPaintFinish,
             patternRotation,
             blueprintProxy,
-            instanceSpecificData
+            instanceSpecificData,
+            serviceProvider,
+            playerInfoTableIndex
         } satisfies BuildableTypeInstance;
     }
 
-    export const Serialize = (writer: ContextWriter, instance: BuildableTypeInstance, lightweightVersion: number): void => {
+    export const Serialize = (writer: ContextWriter, instance: BuildableTypeInstance, lightweightVersion: number, saveVersion: number = 0): void => {
         Transform.Serialize(writer, instance.transform);
 
         ObjectReference.write(writer, instance.usedSwatchSlot);
@@ -147,6 +163,15 @@ export namespace BuildableTypeInstance {
 
         if (lightweightVersion >= RuntimeBuildableInstanceDataVersion.AddedTypeSpecificData) {
             FGDynamicStruct.Serialize(writer, instance.instanceSpecificData!);
+        }
+
+        if (lightweightVersion >= RuntimeBuildableInstanceDataVersion.AddedServiceProviderAndPlayerInfo) {
+            writer.writeByte(instance.serviceProvider ?? 0);
+            if (saveVersion >= 57) {
+                writer.writeInt32(instance.playerInfoTableIndex ?? 0);
+            } else {
+                writer.writeByte(instance.playerInfoTableIndex ?? 0);
+            }
         }
     }
 };

@@ -163,7 +163,15 @@ export enum SaveCustomVersion {
     // 2025-04-23: Cleaning up invalid train track connections for saves prior to 1.1. Clears out ghost / teleporting connections and adds railroad switches where needed if there's a junction that doesn't have them.
     RailroadTrackConnectionCleanup,
 
+    // 2025-xx-xx: Per-level and per-object SaveObjectVersionData serialization. Introduces trailing version data after each object body.
+    SerializePerObjectVersionData,
+
+    // Versions 54-57 were internal/unreleased
+
+    // 2026-03-17: Satisfactory 1.2 experimental. New property header format (FPropertyTypeName tree), serializationControl byte, widened lightweight playerInfoTableIndex.
+    Update1_2 = 58,
+
     // -----<new versions can be added above this line>-------------------------------------------------
     VersionPlusOne,
-    LatestVersion = VersionPlusOne - 1
+    LatestVersion = Update1_2
 };

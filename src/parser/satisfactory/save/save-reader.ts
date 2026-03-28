@@ -28,7 +28,9 @@ export class SaveReader extends ContextReader {
 	};
 
 	public static GetRoughSaveVersion = (saveVersion: number): RoughSaveVersion => {
-		if (SaveReader.IsGameVersionAtLeast_U1_1(saveVersion)) {
+		if (SaveReader.IsGameVersionAtLeast_U1_2(saveVersion)) {
+			return 'U1.2+';
+		} else if (SaveReader.IsGameVersionAtLeast_U1_1(saveVersion)) {
 			return 'U1.1+';
 		} else if (SaveReader.IsGameVersionAtLeast_U1(saveVersion)) {
 			return 'U1.0';
@@ -40,6 +42,7 @@ export class SaveReader extends ContextReader {
 			return '<U6';
 		}
 	};
+	public static IsGameVersionAtLeast_U1_2 = (saveVersion: number) => saveVersion >= SaveCustomVersion.Update1_2;
 	public static IsGameVersionAtLeast_U1_1 = (saveVersion: number) => saveVersion >= SaveCustomVersion.SerializePerStreamableLevelTOCVersion;
 	public static IsGameVersionAtLeast_U1 = (saveVersion: number) => saveVersion >= SaveCustomVersion.Version1;
 	public static IsGameVersionAtLeast_U8 = (saveVersion: number) => saveVersion >= SaveCustomVersion.UnrealEngine5;	// Could be anywhere from UnrealEngine5 (37) to ResetBrokenBlueprintSplinnes (42)
@@ -55,9 +58,17 @@ export class SaveReader extends ContextReader {
 		this.maxByte = this.fileBuffer.byteLength;
 		this.bufferView = new DataView(this.fileBuffer);
 
-		const totalBodyRestSize = this.readInt32();
-		if (result.uncompressedData.byteLength !== (totalBodyRestSize + (this.context.saveVersion >= SaveCustomVersion.UnrealEngine5 ? 8 : 4))) {
-			throw new CorruptSaveError(`Possibly corrupt. Indicated size of total save body (${totalBodyRestSize + 8}) does not match the uncompressed real size of ${result.uncompressedData.byteLength}.`);
+		let totalBodyRestSize: number;
+		let sizeFieldBytes: number;
+		if (this.context.saveVersion >= SaveCustomVersion.UnrealEngine5) {
+			totalBodyRestSize = Number(this.readInt64());
+			sizeFieldBytes = 8;
+		} else {
+			totalBodyRestSize = this.readInt32();
+			sizeFieldBytes = 4;
+		}
+		if (result.uncompressedData.byteLength !== (totalBodyRestSize + sizeFieldBytes)) {
+			throw new CorruptSaveError(`Possibly corrupt. Indicated size of total save body (${totalBodyRestSize + sizeFieldBytes}) does not match the uncompressed real size of ${result.uncompressedData.byteLength}.`);
 		}
 
 		return {

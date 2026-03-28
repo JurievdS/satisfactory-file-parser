@@ -18,6 +18,7 @@ export type SaveReaderWriterContext = {
     mods: Record<string, string>;
     mapName?: string;
     compressionInfo?: ChunkCompressionInfo;
+    persistentLevelUE5Version?: number;
 }
 
 /**

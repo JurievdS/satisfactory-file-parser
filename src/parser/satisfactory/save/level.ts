@@ -9,6 +9,7 @@ import { ObjectReference } from "../types/structs/ObjectReference";
 import { LevelToDestroyedActorsMap } from './level-to-destroyed-actors-map';
 import { ObjectReferencesList } from './object-references-list';
 import { SaveCustomVersion } from './save-custom-version';
+import { SaveObjectVersionData } from './save-object-version-data';
 import { SaveReader } from './save-reader';
 
 /**
@@ -20,6 +21,7 @@ export type Level = {
 	collectables: ObjectReference[];
 	saveCustomVersion?: number;
 	destroyedActorsMap?: LevelToDestroyedActorsMap;
+	levelVersionData?: import('./save-object-version-data').SaveObjectVersionData;
 }
 export type Levels = { [levelName: string]: Level };
 
@@ -33,10 +35,12 @@ export namespace Level {
 		}
 		const isPersistentLevel = reader.context.mapName === levelName;
 
-		// checksum object headers.
-		const headersBinLen = reader.readInt32(); // object headers + binary length
+		// Section 1: object headers + collectables/destroyed actors
+		let headersBinLen: number;
 		if (reader.context.saveVersion >= SaveCustomVersion.UnrealEngine5) {
-			reader.readInt32Zero();
+			headersBinLen = Number(reader.readInt64());
+		} else {
+			headersBinLen = reader.readInt32();
 		}
 
 		// object headers
@@ -63,10 +67,12 @@ export namespace Level {
 			console.warn(`remaining size ${remainingSize} not 0 in level ${levelName}. Save may be corrupt.`);
 		}
 
-		// checksum for object content size
-		const objectContentsBinLen = reader.readInt32();
+		// Section 2: object contents
+		let objectContentsBinLen: number;
 		if (reader.context.saveVersion >= SaveCustomVersion.UnrealEngine5) {
-			reader.readInt32Zero();
+			objectContentsBinLen = Number(reader.readInt64());
+		} else {
+			objectContentsBinLen = reader.readInt32();
 		}
 
 		// objects contents
@@ -78,21 +84,22 @@ export namespace Level {
 			console.warn(`save seems corrupt. Level ${level.name} is not even obeying the object count checksum.`, level.name);
 		}
 
+		// Section 3: level save version (all levels, not just non-persistent, per GreyHak)
+		level.saveCustomVersion = reader.readInt32();
 
-		// only NOT in the persistent level, we have saveVersion
-		if (!isPersistentLevel) {
-			if (reader.context.saveVersion >= SaveCustomVersion.SerializePerStreamableLevelTOCVersion) {
-				level.saveCustomVersion = reader.readInt32();
-			}
-		}
-
-		// 2nd time.
-		// for persistent level, we have LevelToDestroyedActorsMap, else collectibles
-		// Listed here since < U8 and in U8 as well. So this is the best list you can rely on.
+		// Section 4: collectables/destroyed actors (2nd occurrence)
 		if (isPersistentLevel) {
 			level.destroyedActorsMap = LevelToDestroyedActorsMap.read(reader);
 		} else {
 			level.collectables = ObjectReferencesList.ReadList(reader);
+		}
+
+		// Section 5: per-level SaveObjectVersionData (saveVersion >= 53, non-persistent only)
+		if (!isPersistentLevel && reader.context.saveVersion >= SaveCustomVersion.SerializePerObjectVersionData) {
+			const hasVersionData = reader.readInt32() >= 1;
+			if (hasVersionData) {
+				level.levelVersionData = SaveObjectVersionData.Parse(reader);
+			}
 		}
 
 		return level;
@@ -101,10 +108,11 @@ export namespace Level {
 	export const SerializeLevel = (writer: ContextWriter, level: Level): void => {
 		const isPersistentLevel = level.name === writer.context.mapName;
 		const lenIndicatorHeaderAndDestroyedEntitiesSize = writer.getBufferPosition();
-		writer.writeInt32(0);	// len indicator
 
 		if (writer.context.saveVersion >= SaveCustomVersion.UnrealEngine5) {
-			writer.writeInt32Zero();
+			writer.writeInt64(0n);	// len indicator (int64 placeholder)
+		} else {
+			writer.writeInt32(0);	// len indicator (int32 placeholder)
 		}
 
 		SerializeAllObjectHeaders(writer, level.objects);
@@ -117,18 +125,14 @@ export namespace Level {
 		}
 
 		// replace binary size from earlier for - object headers + collectables
-		writer.writeBinarySizeFromPosition(lenIndicatorHeaderAndDestroyedEntitiesSize, lenIndicatorHeaderAndDestroyedEntitiesSize + 8);
+		const sizeFieldBytes = writer.context.saveVersion >= SaveCustomVersion.UnrealEngine5 ? 8 : 4;
+		writer.writeBinarySizeFromPosition(lenIndicatorHeaderAndDestroyedEntitiesSize, lenIndicatorHeaderAndDestroyedEntitiesSize + sizeFieldBytes);
 
 		// write entities
 		SerializeAllObjectContents(writer, level.objects, level.name);
 
-
-		// only NOT in the persistent level, we have saveVersion
-		if (!isPersistentLevel) {
-			if (writer.context.saveVersion >= SaveCustomVersion.SerializePerStreamableLevelTOCVersion) {
-				writer.writeInt32(level.saveCustomVersion ?? SaveCustomVersion.SerializePerStreamableLevelTOCVersion);
-			}
-		}
+		// level save version
+		writer.writeInt32(level.saveCustomVersion ?? 0);
 
 		// 2nd time.
 		// for persistent level, we have LevelToDestroyedActorsMap, else collectibles
@@ -136,6 +140,16 @@ export namespace Level {
 			LevelToDestroyedActorsMap.write(writer, level.destroyedActorsMap ?? {});
 		} else {
 			ObjectReferencesList.SerializeList(writer, level.collectables);
+		}
+
+		// per-level SaveObjectVersionData (saveVersion >= 53, non-persistent only)
+		if (!isPersistentLevel && writer.context.saveVersion >= SaveCustomVersion.SerializePerObjectVersionData) {
+			if (level.levelVersionData) {
+				writer.writeInt32(1);
+				SaveObjectVersionData.Serialize(writer, level.levelVersionData);
+			} else {
+				writer.writeInt32(0);
+			}
 		}
 	}
 
@@ -162,35 +176,61 @@ export namespace Level {
 
 	export const ReadNObjectContents = (reader: ContextReader, count: number, objects: SaveObject[], objectListOffset: number = 0): void => {
 		for (let i = 0; i < count; i++) {
+			const obj = objects[i + objectListOffset];
 			if (reader.context.saveVersion >= SaveCustomVersion.IntroducedWorldPartition) {
-				objects[i + objectListOffset].saveCustomVersion = reader.readInt32();
+				obj.saveCustomVersion = reader.readInt32();
 			}
 			if (reader.context.saveVersion >= SaveCustomVersion.IntroducedWorldPartition) {
-				objects[i + objectListOffset].shouldMigrateObjectRefsToPersistent = reader.readInt32() >= 1;
+				obj.shouldMigrateObjectRefsToPersistent = reader.readInt32() >= 1;
 			}
 
 			const binarySize = reader.readInt32();
 			const before = reader.getBufferPosition();
 
+			// Per-object version data is stored AFTER the object body (at before + binarySize).
+			// We read it first to get the UE5 version, which affects property parsing.
+			let objectUE5Version = reader.context.persistentLevelUE5Version ?? -1;
+			let trailingVersionDataSize = 0;
+			if (obj.saveCustomVersion >= SaveCustomVersion.SerializePerObjectVersionData) {
+				const jumpPos = before + binarySize;
+				const savedPos = reader.getBufferPosition();
+				reader.skipBytes(jumpPos - savedPos);
+
+				const shouldSerialize = reader.readInt32() >= 1;
+				if (shouldSerialize) {
+					obj.perObjectVersionData = SaveObjectVersionData.Parse(reader);
+					objectUE5Version = SaveObjectVersionData.GetUE5Version(obj.perObjectVersionData);
+				}
+				trailingVersionDataSize = reader.getBufferPosition() - jumpPos;
+
+				// Seek back to read the actual object body
+				reader.skipBytes(savedPos - reader.getBufferPosition());
+			}
+
 			try {
-				if (isSaveEntity(objects[i + objectListOffset])) {
-					SaveEntity.ParseData(objects[i + objectListOffset] as SaveEntity, binarySize, reader, objects[i + objectListOffset].typePath);
-				} else if (isSaveComponent(objects[i + objectListOffset])) {
-					SaveComponent.ParseData(objects[i + objectListOffset] as SaveComponent, binarySize, reader, objects[i + objectListOffset].typePath);
+				if (isSaveEntity(obj)) {
+					SaveEntity.ParseData(obj as SaveEntity, binarySize, reader, obj.typePath, objectUE5Version);
+				} else if (isSaveComponent(obj)) {
+					SaveComponent.ParseData(obj as SaveComponent, binarySize, reader, obj.typePath, objectUE5Version);
 				}
 
 				const after = reader.getBufferPosition();
 				if (after - before !== binarySize) {
-					throw new CorruptSaveError(`Could not read entity ${objects[i + objectListOffset].instanceName}, as ${after - before} bytes were read, but ${binarySize} bytes were indicated.`);
+					throw new CorruptSaveError(`Could not read entity ${obj.instanceName}, as ${after - before} bytes were read, but ${binarySize} bytes were indicated.`);
 				}
 			} catch (error) {
 				if (reader.context.throwErrors) {
 					throw error;
 				} else {
-					console.warn(`Could not read object ${objects[i + objectListOffset].instanceName} of type ${objects[i + objectListOffset].typePath} as a whole. will be removed from level's object list.`);
+					console.warn(`Could not read object ${obj.instanceName} of type ${obj.typePath} as a whole. will be removed from level's object list.`);
 					reader.skipBytes(before - reader.getBufferPosition() + binarySize);
 					objects[i + objectListOffset] = null as unknown as SaveObject;
 				}
+			}
+
+			// Skip past the trailing version data
+			if (trailingVersionDataSize > 0) {
+				reader.skipBytes(trailingVersionDataSize);
 			}
 		}
 	}
