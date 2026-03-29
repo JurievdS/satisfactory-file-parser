@@ -74,6 +74,7 @@ export namespace StructProperty {
     export const Parse = (reader: ContextReader, ueType: string, index: number, size: number, subtype: string): StructProperty => {
 
         const guidInfo = GUIDInfo.read(reader);
+        const useNewFormat = (reader.context as any).currentObjectUE5Version >= 1012;
 
         const struct: StructProperty = {
             ...AbstractBaseProperty.Create({ index, ueType, guidInfo, type: '' }),
@@ -82,24 +83,27 @@ export namespace StructProperty {
             subtype
         };
 
-        const unk1 = reader.readInt32();
-        if (unk1 !== 0) {
-            struct.unk1 = unk1;
-        }
+        // In the new property format (UE5 >= 1012), the 4 unknown int32s are not present
+        if (!useNewFormat) {
+            const unk1 = reader.readInt32();
+            if (unk1 !== 0) {
+                struct.unk1 = unk1;
+            }
 
-        const unk2 = reader.readInt32();
-        if (unk2 !== 0) {
-            struct.unk2 = unk2;
-        }
+            const unk2 = reader.readInt32();
+            if (unk2 !== 0) {
+                struct.unk2 = unk2;
+            }
 
-        const unk3 = reader.readInt32();
-        if (unk3 !== 0) {
-            struct.unk3 = unk3;
-        }
+            const unk3 = reader.readInt32();
+            if (unk3 !== 0) {
+                struct.unk3 = unk3;
+            }
 
-        const unk4 = reader.readInt32();
-        if (unk4 !== 0) {
-            struct.unk4 = unk4;
+            const unk4 = reader.readInt32();
+            if (unk4 !== 0) {
+                struct.unk4 = unk4;
+            }
         }
 
         const before = reader.getBufferPosition();

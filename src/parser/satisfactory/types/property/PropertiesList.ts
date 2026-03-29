@@ -98,8 +98,8 @@ export namespace PropertiesList {
 					headerSubtype = reader.readString(); // array element type
 					const headerTypeB = reader.readUint32();
 					if (headerTypeB === 1) {
-						// struct array
-						reader.readString(); // struct sub-type name
+						// struct array — store the sub-type for StructArrayProperty to use
+						(reader.context as any)._structArraySubType = reader.readString();
 						readPackageNames(reader);
 					} else if (headerTypeB === 2) {
 						// enum array
@@ -153,19 +153,8 @@ export namespace PropertiesList {
 		try {
 			switch (propertyType) {
 				case 'BoolProperty':
-					if (useNewHeaderFormat) {
-						// New format: no GUID flag byte after the bool value
-						const boolValue = BoolProperty.ReadValue(reader);
-						overhead = 1; // just the value byte
-						currentProperty = {
-							...AbstractBaseProperty.Create({ index, ueType: propertyType, type: '' }),
-							type: 'BoolProperty' as const,
-							value: boolValue
-						};
-					} else {
-						overhead = BoolProperty.CalcOverhead(currentProperty);
-						currentProperty = BoolProperty.Parse(reader, propertyType, index);
-					}
+					overhead = BoolProperty.CalcOverhead(currentProperty);
+					currentProperty = BoolProperty.Parse(reader, propertyType, index);
 					break;
 
 				case 'ByteProperty': {
@@ -287,12 +276,17 @@ export namespace PropertiesList {
 				throw error;
 			} else {
 
-				// we inform about the error and dump the calculated byte content of the property.
-				console.warn(error);
-				console.warn(`property ${propertyName} of type ${propertyType} is therefore dumped as raw bytes.`);
+				// we inform about the error and skip the calculated byte content of the property.
+				console.warn(`property ${propertyName} of type ${propertyType} could not be parsed. Skipping ${binarySize + overhead} bytes.`);
 
 				reader.skipBytes(before - reader.getBufferPosition());
-				(currentProperty as AbstractBaseProperty).rawBytes = Array.from(reader.readBytes(binarySize + overhead));
+				const skipSize = binarySize + overhead;
+				if (skipSize <= 65536) {
+					(currentProperty as AbstractBaseProperty).rawBytes = Array.from(reader.readBytes(skipSize));
+				} else {
+					// Too large to store as array — just skip
+					reader.skipBytes(skipSize);
+				}
 			}
 		}
 

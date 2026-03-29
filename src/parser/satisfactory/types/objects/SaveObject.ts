@@ -74,7 +74,11 @@ export abstract class SaveObject implements SaveObjectHeader {
 
 		remainingSize = length - (reader.getBufferPosition() - start);
 		if (remainingSize > 0) {
-			obj.trailingData = Array.from(reader.readBytes(remainingSize));
+			if (remainingSize <= 65536) {
+				obj.trailingData = Array.from(reader.readBytes(remainingSize));
+			} else {
+				reader.skipBytes(remainingSize);
+			}
 		} else if (remainingSize < 0) {
 			const error = new ParserError('ParserError', `Unexpected. Read more bytes than are indicated for entity ${obj.instanceName}. bytes left to read is ${remainingSize}`);
 			if (reader.context.throwErrors) {

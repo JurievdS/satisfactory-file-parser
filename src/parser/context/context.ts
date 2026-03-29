@@ -19,6 +19,8 @@ export type SaveReaderWriterContext = {
     mapName?: string;
     compressionInfo?: ChunkCompressionInfo;
     persistentLevelUE5Version?: number;
+    /** Set during object content parsing to the per-object UE5 version. Used by property parsers to determine format. */
+    currentObjectUE5Version?: number;
 }
 
 /**

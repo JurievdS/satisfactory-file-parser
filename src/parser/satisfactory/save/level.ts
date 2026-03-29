@@ -207,6 +207,9 @@ export namespace Level {
 				reader.skipBytes(savedPos - reader.getBufferPosition());
 			}
 
+			// Set context for property parsers to check
+			reader.context.currentObjectUE5Version = objectUE5Version;
+
 			try {
 				if (isSaveEntity(obj)) {
 					SaveEntity.ParseData(obj as SaveEntity, binarySize, reader, obj.typePath, objectUE5Version);
@@ -268,6 +271,9 @@ export namespace Level {
 
 	export const ReadAllObjectHeaders = (reader: ContextReader, objectsList: SaveObject[]): void => {
 		let countObjectHeaders = reader.readInt32();
+		if (countObjectHeaders > 1000000) {
+			throw new CorruptSaveError(`Object header count ${countObjectHeaders} exceeds 1M safety limit. Likely corrupt data.`);
+		}
 
 		// read in batches
 		const batchSize = 10000;

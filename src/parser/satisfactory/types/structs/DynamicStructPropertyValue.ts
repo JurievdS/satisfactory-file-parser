@@ -15,7 +15,7 @@ export namespace DynamicStructPropertyValue {
             type, properties: {}
         };
 
-        data.properties = PropertiesList.ParseList(reader);
+        data.properties = PropertiesList.ParseList(reader, (reader.context as any).currentObjectUE5Version ?? -1);
 
         return data;
     };

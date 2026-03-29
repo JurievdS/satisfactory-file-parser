@@ -16,53 +16,68 @@ export type StructArrayProperty = AbstractBaseProperty & {
 export namespace StructArrayProperty {
 
     export const Parse = (reader: ContextReader, elementCount: number, subtype: string, ueType: string, index: number = 0): StructArrayProperty => {
+        const useNewFormat = (reader.context as any).currentObjectUE5Version >= 1012;
 
-        const name = reader.readString(); // Same as currentProperty.name
-        const allUEType = reader.readString(); // StructProperty
+        let allStructType: string;
+        let allIndex = 0;
+        let allGuid: GUIDInfo = undefined;
+        let binarySize: number;
+        const structValueFields: ArrayPropertyStructValueFields = { allStructType: '', allGuid: undefined };
 
-        const binarySize = reader.readInt32(); // structureSize
-        const allIndex = reader.readInt32(); // Since ArrayProperty itself has an index already, this was never observed to be anything else than 0.
+        if (useNewFormat) {
+            // New format: inner header is removed. The struct sub-type was already read
+            // in the outer property header (headerTypeA=1, headerTypeB=1).
+            // We need to get it from context — it's stored in the subtype field by ParseSingleProperty.
+            // Actually, the binarySize here is the remaining bytes for ALL struct elements.
+            // We read it from the data directly.
+            allStructType = (reader.context as any)._structArraySubType ?? subtype;
+            binarySize = 0; // Not used for size validation in new format
 
-        const allStructType = reader.readString();
-        const allGuid = GUIDInfo.read(reader);
+            structValueFields.allStructType = allStructType;
+        } else {
+            // Old format: full inner header
+            const name = reader.readString(); // Same as currentProperty.name
+            const allUEType = reader.readString(); // StructProperty
 
-        const allUnk1 = reader.readInt32();
-        const allUnk2 = reader.readInt32();
-        const allUnk3 = reader.readInt32();
-        const allUnk4 = reader.readInt32();
+            binarySize = reader.readInt32(); // structureSize
+            allIndex = reader.readInt32();
 
-        const structValueFields: ArrayPropertyStructValueFields = { allStructType, allIndex: allIndex > 0 ? allIndex : undefined, allGuid };
-        if (allUnk1 !== 0) {
-            structValueFields.allUnk1 = allUnk1;
+            allStructType = reader.readString();
+            allGuid = GUIDInfo.read(reader);
+
+            const allUnk1 = reader.readInt32();
+            const allUnk2 = reader.readInt32();
+            const allUnk3 = reader.readInt32();
+            const allUnk4 = reader.readInt32();
+
+            structValueFields.allStructType = allStructType;
+            structValueFields.allIndex = allIndex > 0 ? allIndex : undefined;
+            structValueFields.allGuid = allGuid;
+            if (allUnk1 !== 0) structValueFields.allUnk1 = allUnk1;
+            if (allUnk2 !== 0) structValueFields.allUnk2 = allUnk2;
+            if (allUnk3 !== 0) structValueFields.allUnk3 = allUnk3;
+            if (allUnk4 !== 0) structValueFields.allUnk4 = allUnk4;
         }
-        if (allUnk2 !== 0) {
-            structValueFields.allUnk2 = allUnk2;
-        }
-        if (allUnk3 !== 0) {
-            structValueFields.allUnk3 = allUnk3;
-        }
-        if (allUnk4 !== 0) {
-            structValueFields.allUnk4 = allUnk4;
-        }
-
 
         const before = reader.getBufferPosition();
         const values = new Array(elementCount).fill(0).map(() => {
 
             const struct: StructProperty = {
-                ...AbstractBaseProperty.Create({ index: allIndex, ueType: allUEType, guidInfo: allGuid, type: '' }),
+                ...AbstractBaseProperty.Create({ index: allIndex, ueType: 'StructProperty', guidInfo: allGuid, type: '' }),
                 type: 'StructProperty',
                 subtype: allStructType,
                 value: { values: [] }
             };
 
-            // we do NOT assign individual unk's here. Since they are only serialized always on ArrayProperty's Level once for all elements.
             struct.value = StructProperty.ParseValue(reader, allStructType, binarySize);
             return struct;
         });
-        const readBytes = reader.getBufferPosition() - before;
-        if (readBytes !== binarySize) {
-            throw new Error(`possibly corrupt in array of struct. read ${readBytes} bytes but ${binarySize} were indicated. ${elementCount} elements of struct subtype ${allStructType}.`);
+
+        if (!useNewFormat) {
+            const readBytes = reader.getBufferPosition() - before;
+            if (readBytes !== binarySize) {
+                throw new Error(`possibly corrupt in array of struct. read ${readBytes} bytes but ${binarySize} were indicated. ${elementCount} elements of struct subtype ${allStructType}.`);
+            }
         }
 
         return {

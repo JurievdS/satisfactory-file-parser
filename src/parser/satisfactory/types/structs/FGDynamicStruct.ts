@@ -31,7 +31,7 @@ export namespace FGDynamicStruct {
                 struct.rawBytes = FINItemStateFileSystem.read(reader);
             } else {
                 const binarySize = reader.readInt32();
-                struct.properties = PropertiesList.ParseList(reader);
+                struct.properties = PropertiesList.ParseList(reader, (reader.context as any).currentObjectUE5Version ?? -1);
             }
 
         }

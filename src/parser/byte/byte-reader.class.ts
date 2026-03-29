@@ -42,7 +42,14 @@ export abstract class ByteReader implements BinaryReadable {
 		return this.readUint8();
 	}
 	public readBytes(count: number): Uint8Array {
-		return new Uint8Array(new Array(count).fill(0).map(pl => this.readByte()));
+		if (count > 1048576) {
+			throw new CorruptSaveError(`readBytes count ${count} exceeds 1MB safety limit at position ${this.currentByte}.`);
+		}
+		const result = new Uint8Array(count);
+		for (let i = 0; i < count; i++) {
+			result[i] = this.readUint8();
+		}
+		return result;
 	}
 	public bytesToHexRepresentation(bytes: number[]): string[] {
 		return bytes.map(byte => ('0' + byte.toString(16)).slice(-2));
@@ -116,9 +123,14 @@ export abstract class ByteReader implements BinaryReadable {
 		}
 
 		// Range error!
-		if (strLength > (this.bufferView.buffer.byteLength - this.currentByte)) {
-			let errorMessage = `Cannot read string of length ${strLength} at position ${this.currentByte} as it exceeds the end at ${this.bufferView.buffer.byteLength}`;
-			throw new Error(errorMessage);
+		const absLength = Math.abs(strLength);
+		const bytesNeeded = strLength < 0 ? absLength * 2 : absLength;
+		if (bytesNeeded > (this.bufferView.buffer.byteLength - this.currentByte)) {
+			throw new CorruptSaveError(`Cannot read string of length ${strLength} at position ${this.currentByte} as it exceeds the end at ${this.bufferView.buffer.byteLength}`);
+		}
+		// Guard against unreasonably large strings that would OOM
+		if (absLength > 1048576) {
+			throw new CorruptSaveError(`String length ${strLength} at position ${this.currentByte} exceeds 1MB safety limit. Likely corrupt data.`);
 		}
 
 		// it uses UTF16 if text is non-ascii, even if it would fit into UTF8.
