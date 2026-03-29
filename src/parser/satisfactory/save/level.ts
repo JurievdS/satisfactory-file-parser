@@ -84,8 +84,10 @@ export namespace Level {
 			console.warn(`save seems corrupt. Level ${level.name} is not even obeying the object count checksum.`, level.name);
 		}
 
-		// Section 3: level save version (all levels, not just non-persistent, per GreyHak)
-		level.saveCustomVersion = reader.readInt32();
+		// Section 3: level save version (non-persistent levels only)
+		if (!isPersistentLevel) {
+			level.saveCustomVersion = reader.readInt32();
+		}
 
 		// Section 4: collectables/destroyed actors (2nd occurrence)
 		if (isPersistentLevel) {
