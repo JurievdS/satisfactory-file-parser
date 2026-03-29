@@ -72,14 +72,21 @@ export class Parser {
 		save.levels = reader.readLevels();
 
 		// unresolved data, probably not even useful.
-		if (reader.getBufferPosition() < reader.getBufferLength()) {
-			const countUnresolvedWorldSaveData = reader.readInt32();
-			if (countUnresolvedWorldSaveData) {
-				save.unresolvedWorldSaveData = [];
-				for (let i = 0; i < countUnresolvedWorldSaveData; i++) {
-					save.unresolvedWorldSaveData.push(ObjectReference.read(reader));
+		try {
+			if (reader.getBufferPosition() < reader.getBufferLength()) {
+				const countUnresolvedWorldSaveData = reader.readInt32();
+				if (countUnresolvedWorldSaveData) {
+					save.unresolvedWorldSaveData = [];
+					for (let i = 0; i < countUnresolvedWorldSaveData; i++) {
+						save.unresolvedWorldSaveData.push(ObjectReference.read(reader));
+					}
 				}
 			}
+		} catch (error) {
+			if (reader.context.throwErrors) {
+				throw error;
+			}
+			// else ignore — we have the levels we could parse
 		}
 
 		reader.onProgressCallback(reader.getBufferProgress(), 'finished parsing.');

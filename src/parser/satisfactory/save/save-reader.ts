@@ -98,7 +98,16 @@ export class SaveReader extends ContextReader {
 				this.onProgressCallback(this.getBufferProgress(), `reading level [${(i + 1)}/${(levelCount + 1)}] ${levelSingleName}`);
 			}
 
-			levels[levelSingleName] = Level.ReadLevel(this, levelSingleName);
+			try {
+				levels[levelSingleName] = Level.ReadLevel(this, levelSingleName);
+			} catch (error) {
+				if (this.context.throwErrors) {
+					throw error;
+				} else {
+					console.warn(`Could not read level ${levelSingleName}: ${(error as Error).message?.slice(0, 100)}. Skipping remaining levels.`);
+					break;
+				}
+			}
 		}
 
 		return levels;
