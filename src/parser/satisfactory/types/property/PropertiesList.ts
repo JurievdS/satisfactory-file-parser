@@ -159,7 +159,7 @@ export namespace PropertiesList {
 
 				case 'ByteProperty': {
 					const type = useNewHeaderFormat ? headerEnumName : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : ByteProperty.CalcOverhead(currentProperty, type);
+					overhead = useNewHeaderFormat ? 1 : ByteProperty.CalcOverhead(currentProperty, type);
 					currentProperty = ByteProperty.Parse(reader, propertyType, index, type);
 					break;
 				}
@@ -225,27 +225,27 @@ export namespace PropertiesList {
 
 				case 'EnumProperty': {
 					const name = useNewHeaderFormat ? headerEnumName : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : EnumProperty.CalcOverhead(currentProperty, name);
+					overhead = useNewHeaderFormat ? 1 : EnumProperty.CalcOverhead(currentProperty, name);
 					currentProperty = EnumProperty.Parse(reader, propertyType, name, index);
 					break;
 				}
 
 				case 'StructProperty':
 					subtype = useNewHeaderFormat ? headerSubtype : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : StructProperty.CalcOverhead(currentProperty, subtype);
+					overhead = useNewHeaderFormat ? 1 : StructProperty.CalcOverhead(currentProperty, subtype);
 					currentProperty = StructProperty.Parse(reader, propertyType, index, binarySize, subtype);
 					break;
 
 				case 'ArrayProperty':
 					subtype = useNewHeaderFormat ? headerSubtype : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : ArrayProperty.CalcOverhead(currentProperty, subtype);
+					overhead = useNewHeaderFormat ? 1 : ArrayProperty.CalcOverhead(currentProperty, subtype);
 					currentProperty = ArrayProperty.Parse(reader, propertyType, index, binarySize, subtype);
 					break;
 
 				case 'MapProperty': {
 					const keyType = useNewHeaderFormat ? headerKeyType : reader.readString();
 					const valueType = useNewHeaderFormat ? headerValueType : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : MapProperty.CalcOverhead(currentProperty, keyType, valueType);
+					overhead = useNewHeaderFormat ? 1 : MapProperty.CalcOverhead(currentProperty, keyType, valueType);
 					currentProperty = MapProperty.Parse(reader, propertyName, binarySize, keyType, valueType);
 					break;
 				}
@@ -257,7 +257,7 @@ export namespace PropertiesList {
 
 				case 'SetProperty':
 					subtype = useNewHeaderFormat ? headerSubtype : reader.readString();
-					overhead = useNewHeaderFormat ? 0 : SetProperty.CalcOverhead(currentProperty, subtype);
+					overhead = useNewHeaderFormat ? 1 : SetProperty.CalcOverhead(currentProperty, subtype);
 					currentProperty = SetProperty.Parse(reader, propertyType, index, propertyName, subtype);
 					break;
 
